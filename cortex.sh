@@ -1,7 +1,7 @@
 #!/bin/sh
 # 
-# A manager for Gemini CLI. The objectives for the shell script is to:
-# - List and manage a number of persona's or Gemini.md files
+# A manager for Gemini CLI. The objectives for the shell script are:
+# - List and manage a number of personas or Gemini.md files
 # - Display an overview of "game state" for each persona, like when
 #   was the last save.
 # - An option to edit or preview the persona and the game state files.
@@ -22,9 +22,14 @@
 #   + /store				  <= A storage space for persona related files.
 #   + /wip                    <= A "working" directory. 
 # /Shell_Script_Guru          <= Another directory for a different persona.
+#
+# TODO
+# - check the head objectives.
+# - Make /storage /wip optional and allow for something else.
+# - look at using persona.rc to point to a custom base directory
 
 # A simple version number to keep track of possible changes.
-VERSION="20251202"
+VERSION="20251203"
 
 # Everything is kept local to the current user. This makes sense as the user
 # needs to be authorised to use Gemini CLI. BASE is a directory where
@@ -53,13 +58,15 @@ PERSONA_EDITOR=""
 usage () {
 	app="${0##*/}"
 	out="
+${app}
+
 Manage a group of persona (system instructions) for Gemin CLI.
 
 Usage: ${app} [ -hv | persona ]
 
  -h      : Show this help and exit.
  -v      : Display some system details such as the number of persona 
-           files and the version number of this script. Then exit.
+           files and the version number of this script, then exit.
  persona : Jump straight to loading this persona. Can be part of a 
            persona name, or the full name. If only part of a name is 
            used and there is a match for more than one persona, each 
@@ -71,8 +78,27 @@ a new one, load, edit or remove any existing personas.
 Passing part of an existing persona name will load Gemini CLI with that 
 persona, bypassing any editing options.
 
-Version:   ${VERSION}
+Version  : ${VERSION}
+"
+	printf "%s\n" "${out}"
+	exit 0
+}
 
+version () {
+	app="${0##*/}"
+	if [ -n "${PERSONA_BASE}" ] && [ -d "${PERSONA_BASE}" ]
+	then
+		pCount="$(find "${PERSONA_BASE}" -type d -mindepth 1 -maxdepth 1 2> /dev/null | wc -l)"
+		pCount="${pCount##*[[:space:]]}"	
+	fi
+	out="
+${app} 
+
+Version  : ${VERSION}
+
+Personas : ${pCount:-0}
+Home     : ${PERSONA_BASE:-Not set}
+Editor   : ${PERSONA_EDITOR:-Not set}
 "
 	printf "%s\n" "${out}"
 	exit 0
@@ -304,9 +330,9 @@ editorCheck () {
 # ${1} : The persona directory base to check
 utilGetTitle () {
 	t=""
-	if [ -n "${1}" -a -d "${1}" ]
+	if [ -n "${1}" ] && [ -d "${1}" ]
 	then
-		md=${1##*/}
+		md="${1##*/}"
 		if [ -f "${1}/${md}.md" ]
 		then
 			t="$(sed 's/^# SYSTEM INSTRUCTION: \(.*\) Persona$/\1/; q' "${1}/${md}.md")"
@@ -353,8 +379,8 @@ personaList () {
 	fi
 	
 	# Do we have any?
-	pCount=$(printf "%s\n" "${PERSONA_LIST}" | wc -l)
-	if [ ${searchMode} -eq 0 -a ${pCount} -eq 1 ]
+	pCount="$(printf "%s\n" "${PERSONA_LIST}" | wc -l)"
+	if [ ${searchMode} -eq 0 ] && [ ${pCount} -eq 1 ]
 	then
 		# Jump straight to the requested
 		PERSONA="${PERSONA_LIST}"
@@ -379,7 +405,7 @@ personaLoad () {
 	# An optional starting point
 	printf "\nYour (optional) opening prompt is: [Ctrl+c to cancel]\n\n"
 	read ans
-	printf "\nStarting Gemini CLI. This can take a moment.\n"
+	printf "\nStarting Gemini CLI with \"%s\" persona.\n\nThis can take a moment.\n" "$(utilGetTitle "${PERSONA}")"
 	if [ -n "${ans}" ]
 	then
 		gemini --prompt-interactive "${ans}"
@@ -391,9 +417,9 @@ personaLoad () {
 personaEdit () {
 	printf "\nStarting an editor.\n"
 	"${PERSONA_EDITOR}" "${PERSONA}/${PERSONA##*/}.md"
-	printf "\nWhat to do now?\n%s\n[R]un the persona (default) | [L]ist persona's | [C]ancel " "${HR}"
+	printf "\nWhat to do now?\n%s\n[U]se persona (default) | [L]ist personas | [C]ancel " "${HR}"
 	read ans
-	if [ -z "${ans}" -o "${ans}" = "r" -o "${ans}" = "R" ]
+	if [ -z "${ans}" -o "${ans}" = "u" -o "${ans}" = "U" ]
 	then
 		personaLoad
 	elif [ "${ans}" = "l" -o "${ans}" = "L" ]
@@ -419,7 +445,7 @@ personaDelete () {
 	else
 		quit "No action performed as the option was invalid."
 	fi
-	printf "\nWhat to do now?\n%s\n[L]ist persona's (default) | [C]ancel " "${HR}"
+	printf "\nWhat to do now?\n%s\n[L]ist personas (default) | [C]ancel " "${HR}"
 	read ans
 	if [ -z "${ans}" -o "${ans}" = "l" -o "${ans}" = "L" -o "${ans}" = "a" -o "${ans}" = "A" ]
 	then
@@ -467,14 +493,17 @@ personaView () {
 		unset IFS
 	fi
 	# What's next
-	printf "\nWhat to do now?\n%s\n[R]un the persona (default) | [L]ist persona's | [C]ancel " "${HR}"
+	printf "\nWhat to do now?\n%s\n[B]ack (default) | [E]dit | [U]se | [C]ancel " "${HR}"
 	read ans
-	if [ -z "${ans}" -o "${ans}" = "r" -o "${ans}" = "R" ]
-	then
-		personaLoad
-	elif [ "${ans}" = "l" -o "${ans}" = "L" ]
+	if [ -z "${ans}" -o "${ans}" = "b" -o "${ans}" = "B" ]
 	then
 		personaList
+	elif [ "${ans}" = "e" -o "${ans}" = "E" ]
+	then
+		personaEdit
+	elif [ "${ans}" = "u" -o "${ans}" = "U" ]
+	then
+		personaLoad
 	elif [ "${ans}" = "c" -o "${ans}" = "C" -o "${ans}" = "q" -o "${ans}" = "Q" ]
 	then
 		quit
@@ -493,7 +522,6 @@ personaNew () {
 		# Need a file safe name
 		pName="${ans}"
 		fName="$(printf "%s\n" "${pName}" | sed 's/ /_/g' | tr -cd '0-9a-zA-Z_-')"
-		#printf "\nfName:[%s]\nans:[%s]\n" "${fName}" "${ans}"
 		# Make the directory structure
 		mkdir -p "${PERSONA_BASE}/${fName}/store" "${PERSONA_BASE}/${fName}/wip"
 		if [ ${?} -ne 0 ]
@@ -502,7 +530,6 @@ personaNew () {
 			exit 1
 		fi
 
-# Changes
 		printf "\nA blank space has been created. You can now use a text editor to make\na persona file by hand or ask Gemini CLI to give you a hand with it.\n\nWhat would you like to do?\n%s\n[E]dit by hand (default) | [G]emini can help | [C]ancel " "${HR}"
 		read ans
 		if [ -z "${ans}" -o "${ans}" = "e" -o "${ans}" = "E" ]
@@ -550,9 +577,9 @@ personaNew () {
 
 		if [ -f "${PERSONA_BASE}/${fName}/${fName}.md" ]
 		then
-			printf "\nThe persona file has been saved.\nWhat is next?\n%s\n[R]un Gemini with the new persona (default) | [C]ancel "
+			printf "\nThe persona file has been saved.\nWhat is next?\n%s\n[U]se the new person with Gemini (default) | [C]ancel "
 			read ans
-			if [ -z "${ans}" -o "${ans}" = "r" -o "${ans}" = "R" -o "${ans}" = "g" -o "${ans}" = "G" ]
+			if [ -z "${ans}" -o "${ans}" = "u" -o "${ans}" = "U" -o "${ans}" = "g" -o "${ans}" = "G" ]
 			then
 				PERSONA="${PERSONA_BASE}/${fName}/${fName}.md"
 				personaLoad
@@ -592,22 +619,19 @@ personaLoop () {
 	mode="load"
 	if [ "$(isNumber "${ans}")" = "yes" ]
 	then
-		personaSet ${ans}
+		personaSet "${ans}"
 	elif [ "${ans}" = "n" -o "${ans}" = "N" ]
 	then
 		personaNew
 		return 0
 	elif [ "${ans}" = "e" -o "${ans}" = "E" ]
 	then
-		#mode="edit"
 		personaOption "edit"
 	elif [ "${ans}" = "d" -o "${ans}" = "D" ]
 	then
-		#mode="delete"
 		personaOption "delete"
 	elif [ "${ans}" = "v" -o "${ans}" = "V" ]
 	then
-		#mode="view"
 		personaOption "view"
 	elif [ "${ans}" = "c" -o "${ans}" = "C" -o "${ans}" = "q" -o "${ans}" = "Q" ]
 	then
@@ -652,7 +676,7 @@ personaOption () {
 		read ans
 		if [ "$(isNumber "${ans}")" = "yes" ]
 		then
-			personaSet ${ans}
+			personaSet "${ans}"
 			return "${?}"
 		else
 			# Head back and redo the options.
@@ -668,7 +692,8 @@ personaOption () {
 # $1 should be already checked to be a number before calling this function.
 # return 0 when PERSONA has been set, 1 otherwise.
 personaSet () {
-	want=${1}
+	want="${1}"
+	PERSONA=""
 	if [ -z "${PERSONA_LIST}" -o -z "${want}" ]
 	then
 		quit "Invaild call to personaSet."
@@ -678,15 +703,15 @@ personaSet () {
 "
 	for p in ${PERSONA_LIST}
 	do
-		md=${p##*/}
+		md="${p##*/}"
 		if [ -f "${p}/${md}.md" ]
 		then
-			if [ ${count} -eq ${want} ]
+			if [ "${count}" -eq "${want}" ]
 			then
 				PERSONA="${p}"
 				break
 			fi
-			count=$((count + 1))
+			count="$((count + 1))"
 		fi
 	done
 	unset IFS
@@ -705,18 +730,14 @@ then
 fi
 
 # Start main logic.
-# System check
-sysCheck
-editorCheck
-
+#
 while getopts hv o
 do
 	case $o in
 		h)
 			usage;;
 		v)
-			printf "\nNOT DONE\n\n"
-			exit;;
+			version;;
 		\?)
 			usage;;
 	esac	
@@ -724,6 +745,10 @@ done
 
 # This will make any extra args be starting at ${1}
 shift $((OPTIND - 1))
+
+# System check
+sysCheck
+editorCheck
 
 # Get the list of persona's
 personaList "${1}"

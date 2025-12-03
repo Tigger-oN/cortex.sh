@@ -8,7 +8,7 @@ Manage a group of persona (system instructions) for Gemini CLI.
     
     -h      : Show this help and exit.
     -v      : Display some system details such as the number of persona
-              files and the version number of this script. Then exit.
+              files and the version number of this script, then exit.
     persona : Jump straight to loading this persona. Can be part of a
               persona name, or the full name. If only part of a name is
               used and there is a match for more than one persona, each
