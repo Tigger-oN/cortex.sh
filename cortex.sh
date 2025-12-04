@@ -25,11 +25,10 @@
 #
 # TODO
 # - check the head objectives.
-# - Make /storage /wip optional and allow for something else.
 # - look at using persona.rc to point to a custom base directory
 
 # A simple version number to keep track of possible changes.
-VERSION="20251203"
+VERSION="20251204"
 
 # Everything is kept local to the current user. This makes sense as the user
 # needs to be authorised to use Gemini CLI. BASE is a directory where
@@ -179,9 +178,10 @@ sysCheck () {
 			:
 		else
 			ERR="${ERR}
- - Unable to location a Gemini CLI Authentication file or exported API
-   Key. Please make sure you can start and run Gemini CLI, then restart
-   cortex.sh.
+ - Unable to locate a Gemini CLI Authentication file or exported API Key
+   Please make sure you can start and run Gemini CLI, then restart
+   cortex.sh. If you are on a headless system, starting gemini in debug
+   mode may help.
 "
 		fi
 	fi
@@ -205,7 +205,7 @@ sysCheck () {
 			exit 1
 		fi
 	fi
-	# There are a few options that can be, stored in an RC
+	# There are a few options that can be stored in an RC
 	if [ ! -f "${BASE_RC}" ]
 	then
 		# Write a blank
@@ -223,7 +223,7 @@ sysCheck () {
 
 # Need to have an editor for a number of functions. Options to check for are:
 # Common: vi, vim, emacs, nano, pico
-# Trending: helix, kakoune, nvim, micro, tilde
+# Trending: helix, kakoune, neovim, nvim, micro, tilde
 # Custom? Guess should offer up an option to add something else too.
 editorCheck () {
 	printf "\nChecking for a text editor.\n"
@@ -265,14 +265,14 @@ editorCheck () {
 	for e in ${ed_list}
 	do
 		printf " %2d) %s\n" ${count} "${e##*/}"
-		count=$((count + 1))
+		count="$((count + 1))"
 	done
 	unset IFS
 	printf "\n%s\nUse [number] | [O]ther | [C]ancel " "${HR}"
 	read ans
 	if [ "$(isNumber "${ans}")" = "yes" ]
 	then
-		if [ ${ans} -gt 0 -a ${ans} -lt ${count} ]
+		if [ "${ans}" -gt 0 -a "${ans}" -lt "${count}" ]
 		then
 			# Need to select an editor
 			count=1
@@ -280,7 +280,7 @@ editorCheck () {
 "
 			for e in ${ed_list}
 			do
-				if [ ${count} -eq ${ans} ]
+				if [ "${count}" -eq "${ans}" ]
 				then
 					PERSONA_EDITOR="${e}"
 					break
@@ -303,7 +303,7 @@ editorCheck () {
 		else
 			# We have an editor, save it to the RC.
 			$(grep -q "PERSONA_EDITOR=" "${BASE_RC}")
-			if [ ${?} -eq 0 ]
+			if [ "${?}" -eq 0 ]
 			then
 				# Found, edit existing
 				tmp="$(sed "s#.*PERSONA_EDITOR=\".*\"#PERSONA_EDITOR=\"${PERSONA_EDITOR}\"#" "${BASE_RC}")"
@@ -321,7 +321,7 @@ editorCheck () {
 	then
 		quit
 	else
-		quit "Invaild request. Canceling as that is the safe option."
+		quit "Invaild request. Cancelling as that is the safe option."
 	fi
 }
 
@@ -523,11 +523,55 @@ personaNew () {
 		pName="${ans}"
 		fName="$(printf "%s\n" "${pName}" | sed 's/ /_/g' | tr -cd '0-9a-zA-Z_-')"
 		# Make the directory structure
+		mkdir -p "${PERSONA_BASE}/${fName}"
 		mkdir -p "${PERSONA_BASE}/${fName}/store" "${PERSONA_BASE}/${fName}/wip"
 		if [ ${?} -ne 0 ]
 		then
 			printf "\nUnable to make the persona directory. Best guess: do not have write\npermission. Can you check this?\n\n" >&2
 			exit 1
+		fi
+		# Offer the option to make /store and /wip or not
+		printf "\nDo you want to make some working directories? These are optional and can\nbe helpful. The suggestion is:\n\n - /store (for keeping files long term)\n - /wip   (for \"work in progress\" files)\n\n"
+		printf "%s\n[B]oth (default) | /[s]tore | /[w]ip | [O]ther | [N]one | [C]ancel " "${HR}"
+		read ans
+		if [ -z "${ans}" -o "${ans}" = "b" -o "${ans}" = "B" ]
+		then
+			printf "\nMaking \"/store\" and \"/wip\"\n"
+			mkdir -p "${PERSONA_BASE}/${fName}/store" "${PERSONA_BASE}/${fName}/wip"
+		elif [ "${ans}" = "s" -o "${ans}" = "S" ]
+		then
+			printf "\nMaking \"/store\" only\n"
+			mkdir -p "${PERSONA_BASE}/${fName}/store"
+		elif [ "${ans}" = "w" -o "${ans}" = "W" ]
+		then
+			printf "\nMaking \"/wip\" only\n"
+			mkdir -p "${PERSONA_BASE}/${fName}/wip"
+		elif [ "${ans}" = "n" -o "${ans}" = "N" ]
+		then
+			printf "\nSkipping persona directories.\n"
+		elif [ "${ans}" = "o" -o "${ans}" = "O" ]
+		then
+			printf "\nWhat is the name of the directory or directories to make?\n\nA space between names will signify more than one directory.\n\nA blank return will skip any directory creation and continue.\n\n"
+			read ans
+			if [ -n "${ans}" ]
+			then
+				for d in ${ans}
+				do
+					dSafe="$(printf "%s\n" "${d}" | sed 's/ /_/g' | tr -cd '0-9a-zA-Z_-')"
+					printf "\nMaking \"/%s\"" "${dSafe}"
+					mkdir -p "${PERSONA_BASE}/${fName}/${dSafe}"
+				done
+				printf "\n"
+			else
+				printf "\nSkipping custom directory.\n"
+			fi
+		elif [ "${ans}" = "c" -o "${ans}" = "C" -o "${ans}" = "q" -o "${ans}" = "Q" ]
+		then
+			rm -rf "${PERSONA_BASE}/${fName}"
+			quit
+		else
+			rm -rf "${PERSONA_BASE}/${fName}"
+			invalidOpt
 		fi
 
 		printf "\nA blank space has been created. You can now use a text editor to make\na persona file by hand or ask Gemini CLI to give you a hand with it.\n\nWhat would you like to do?\n%s\n[E]dit by hand (default) | [G]emini can help | [C]ancel " "${HR}"
@@ -577,12 +621,15 @@ personaNew () {
 
 		if [ -f "${PERSONA_BASE}/${fName}/${fName}.md" ]
 		then
-			printf "\nThe persona file has been saved.\nWhat is next?\n%s\n[U]se the new person with Gemini (default) | [C]ancel "
+			printf "\nThe persona file has been saved.\n\nWhat is next?\n%s\n[U]se new persona with Gemini (default) | [L]ist all | [C]ancel " "${HR}"
 			read ans
 			if [ -z "${ans}" -o "${ans}" = "u" -o "${ans}" = "U" -o "${ans}" = "g" -o "${ans}" = "G" ]
 			then
 				PERSONA="${PERSONA_BASE}/${fName}/${fName}.md"
 				personaLoad
+			elif [ "${ans}" = "l" -o "${ans}" = "L" ]
+			then
+				personaList
 			elif [ "${ans}" = "c" -o "${ans}" = "C" -o "${ans}" = "q" -o "${ans}" = "Q" ]
 			then
 				quit
@@ -703,16 +750,11 @@ personaSet () {
 "
 	for p in ${PERSONA_LIST}
 	do
-		md="${p##*/}"
-		if [ -f "${p}/${md}.md" ]
+		if [ "${count}" -eq "${want}" ]
 		then
-			if [ "${count}" -eq "${want}" ]
-			then
-				PERSONA="${p}"
-				break
-			fi
-			count="$((count + 1))"
+			PERSONA="${p}"
 		fi
+		count="$((count + 1))"
 	done
 	unset IFS
 	if [ -n "${PERSONA}" ]
