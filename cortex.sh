@@ -28,7 +28,7 @@
 # - look at using persona.rc to point to a custom base directory
 
 # A simple version number to keep track of possible changes.
-VERSION="20251204"
+VERSION="20251205"
 
 # Everything is kept local to the current user. This makes sense as the user
 # needs to be authorised to use Gemini CLI. BASE is a directory where
@@ -625,7 +625,7 @@ personaNew () {
 			read ans
 			if [ -z "${ans}" -o "${ans}" = "u" -o "${ans}" = "U" -o "${ans}" = "g" -o "${ans}" = "G" ]
 			then
-				PERSONA="${PERSONA_BASE}/${fName}/${fName}.md"
+				PERSONA="${PERSONA_BASE}/${fName}"
 				personaLoad
 			elif [ "${ans}" = "l" -o "${ans}" = "L" ]
 			then
